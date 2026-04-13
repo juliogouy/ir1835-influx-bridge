@@ -10,6 +10,16 @@
     "auto_remove": true
   },
   "startup": {
-    "runtime_options": "--rm"
+    "runtime_options": "--rm",
+    "env": {
+      "MQTT_BROKER":    "0df3a975794543979e2143bd62e01178.s2.eu.hivemq.cloud",
+      "MQTT_PORT":      "8883",
+      "MQTT_USER":      "JGouy001",
+      "MQTT_PASS":      "JGouy001PSWD",
+      "INFLUX_URL":     "https://us-east-1-1.aws.cloud2.influxdata.com",
+      "INFLUX_TOKEN":   "LiVKmmKVRKBIWrXEBy8K7jMvThBJa83qUmc9RNp6ffw9ne5WYAwmvsQPclYwBwqi6-SrWcandkBB9xmq3ah1aw==",
+      "INFLUX_ORG":     "Cisco_IIoT_Brazil_Edge_Projects",
+      "INFLUX_BUCKET":  "sensor_data"
+    }
   }
 }
