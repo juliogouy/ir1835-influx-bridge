@@ -4,7 +4,7 @@
 
 Subscribes to sensor readings published by `modbus_mqtt_gateway` on HiveMQ Cloud
 and forwards each reading to InfluxDB Cloud using the line protocol HTTP API.
-Displayed live on a Grafana Cloud dashboard.
+Data is displayed live on a Grafana Cloud dashboard.
 
 Runs as a Docker container (IOx application) on the same Cisco IR1835 router,
 alongside the `modbus_mqtt_gateway` app. No serial device required — purely network.
@@ -27,7 +27,7 @@ XY-MD02 sensor
                                                                       ciscoiiotjgouy.grafana.net
 ```
 
-All three IOx apps run self-contained on the IR1835 — no external computer needed during demo.
+Both IOx apps run self-contained on the IR1835 — no external computer needed once deployed.
 
 ---
 
@@ -36,16 +36,66 @@ All three IOx apps run self-contained on the IR1835 — no external computer nee
 | File | Purpose |
 |------|---------|
 | `app.py` | Bridge — subscribes to HiveMQ, writes to InfluxDB via stdlib urllib |
-| `config.py` | All credentials (HiveMQ + InfluxDB) |
-| `config.example.py` | Template with placeholders — safe to commit |
-| `requirements.txt` | Only `paho-mqtt==1.6.1` — no influxdb-client needed |
+| `config.py` | Runtime settings with real credentials — **not committed to git** |
+| `config.example.py` | Template with placeholders — safe to commit, shows all settings |
 | `Dockerfile` | ARM64 container image, identical structure to gateway |
-| `package.yaml` | IOx manifest — no `devices` section |
+| `package.yaml` | IOx manifest — `type: docker`, no `devices` section |
+| `activate_payload.json` | IOx activation parameters — network, env vars |
+| `requirements.txt` | Only `paho-mqtt==1.6.1` — no influxdb-client needed |
 | `grafana-dashboard.json` | Import this into Grafana Cloud to get the dashboard |
+| `dist/` | Build artifacts — `influx_bridge.tar` (Docker image, ~45MB) |
 
 ---
 
-## Key Settings (config.py)
+## Credentials and Environment Variables
+
+Credentials are injected at activation time via `activate_payload.json` — the Docker
+image itself contains no secrets and never needs to be rebuilt to change credentials.
+
+### Where credentials live
+
+`activate_payload.json` → `startup.env` block:
+
+```json
+"startup": {
+  "runtime_options": "--rm",
+  "env": {
+    "MQTT_BROKER":   "your-cluster.s2.eu.hivemq.cloud",
+    "MQTT_PORT":     "8883",
+    "MQTT_USER":     "your-username",
+    "MQTT_PASS":     "your-password",
+    "INFLUX_URL":    "https://your-region.aws.cloud2.influxdata.com",
+    "INFLUX_TOKEN":  "your-influxdb-api-token",
+    "INFLUX_ORG":    "your-org-name",
+    "INFLUX_BUCKET": "sensor_data"
+  }
+}
+```
+
+### How to change credentials (no rebuild needed)
+
+Edit `activate_payload.json`, then stop → deactivate → re-activate → start:
+
+```powershell
+cd "C:\jgouy\projects\platforms\IR MODBUS\ir1835-influx-bridge"
+ioxclient app stop influx_bridge
+ioxclient app deactivate influx_bridge
+ioxclient app activate --payload activate_payload.json influx_bridge
+ioxclient app start influx_bridge
+```
+
+### How config.py reads credentials
+
+`config.py` uses `os.getenv()` with fallback defaults:
+```python
+INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "fallback-value")
+```
+The env vars from `activate_payload.json` take priority at runtime.
+The fallback values in `config.py` are used only outside IOx (e.g. local testing).
+
+---
+
+## Key Settings
 
 ### HiveMQ (subscribe)
 
@@ -79,7 +129,7 @@ All three IOx apps run self-contained on the IR1835 — no external computer nee
 
 ---
 
-## Router Configuration
+## Network (Router Configuration)
 
 The bridge needs its own IP on VirtualPortGroup0 — different from the gateway's `.2`:
 
@@ -91,54 +141,76 @@ app-hosting appid influx_bridge
  name-server0 8.8.8.8
 ```
 
-> **Note:** `modbus_mqtt_gateway` uses `192.168.16.2`. Both share VirtualPortGroup0.
+> **Note:** `modbus_mqtt_gateway` uses `192.168.16.2`. Both share VirtualPortGroup0 (`192.168.16.1`).
 
 ---
 
 ## Build and Deploy
 
-### 1. Build Docker image (dev machine)
-
-```bash
-cd "c:/jgouy/projects/platforms/IR MODBUS/ir1835-influx-bridge"
-docker buildx build --platform linux/arm64 -t influx_bridge --load .
-docker save influx_bridge -o influx_bridge.tar
-```
-
-### 2. Start file server (dev machine)
+### 1. Build Docker image (dev machine — PowerShell)
 
 ```powershell
-# Check if already running:
-docker ps --filter name=iox-serve
-
-# Start if not running (single line — PowerShell does not support backslash continuation):
-docker run -d --rm -p 8080:80 -v "c:/jgouy/projects/platforms/IR MODBUS/ir1835-influx-bridge:/usr/share/nginx/html:ro" --name iox-serve nginx:alpine
+cd "C:\jgouy\projects\platforms\IR MODBUS\ir1835-influx-bridge"
+docker buildx build --platform linux/arm64 -t influx_bridge --load .
+docker save influx_bridge -o dist\influx_bridge.tar
 ```
 
-### 3. Install on router (SSH into router)
+Only needed when `app.py`, `config.py`, `Dockerfile`, or `requirements.txt` change.
+
+### 2. Start file server (dev machine — PowerShell)
+
+Serves the entire `IR MODBUS` parent folder so both apps share one server:
+
+```powershell
+docker rm -f iox-serve
+docker run -d --rm -p 8080:80 `
+  -v "C:/jgouy/projects/platforms/IR MODBUS:/usr/share/nginx/html:ro" `
+  --name iox-serve nginx:alpine
+```
+
+Check it's running: `docker ps --filter name=iox-serve`
+
+### 3. Remove old app from router (SSH into router)
 
 ```
-copy http://192.168.68.58:8080/influx_bridge.tar flash:/influx_bridge.tar
+app-hosting stop appid influx_bridge
+app-hosting deactivate appid influx_bridge
+app-hosting uninstall appid influx_bridge
+```
+
+### 4. Transfer and install
+
+```
+copy http://192.168.68.54:8080/ir1835-influx-bridge/dist/influx_bridge.tar flash:/influx_bridge.tar
 app-hosting install appid influx_bridge package flash:/influx_bridge.tar
 ```
 
-### 4. Activate and start
+Wait for: `app-hosting: influx_bridge installed successfully. Current state is DEPLOYED`
 
-> **No ioxclient needed** — unlike `modbus_mqtt_gateway`, this app has no serial device
-> binding so the standard router CLI works fine.
+### 5. Activate (dev machine — use ioxclient with payload)
 
+```powershell
+cd "C:\jgouy\projects\platforms\IR MODBUS\ir1835-influx-bridge"
+ioxclient app activate --payload activate_payload.json influx_bridge
 ```
-app-hosting activate appid influx_bridge
-app-hosting start appid influx_bridge
+
+> **Note:** Even though this app has no serial device, using `ioxclient app activate --payload`
+> ensures `startup.env` credentials are injected correctly. The router CLI
+> `app-hosting activate` does not process the env vars.
+
+### 6. Start
+
+```powershell
+ioxclient app start influx_bridge
 ```
 
-### 5. Verify both apps are running
+### 7. Verify both apps are running (router CLI)
 
 ```
 show app-hosting list
 ```
 
-Expected output:
+Expected:
 ```
 App id                                   State
 ---------------------------------------------------------
@@ -150,38 +222,30 @@ modbus_mqtt_gateway                      RUNNING
 
 ## Verify It's Working
 
-### Check bridge logs (dev machine)
-
-```bash
-ioxclient app logs tail influx_bridge
-```
-
-Select log file `1`, show last `20` lines. Healthy output:
-
-```
-[INFO] === IR1835 InfluxDB Bridge Starting ===
-[INFO] MQTT connected to ...hivemq.cloud:8883
-[INFO] Subscribed to sensor/+/sensorData
-[INFO] InfluxDB write OK → 33.1°C  41.4%RH
-[INFO] InfluxDB write OK → 33.0°C  41.5%RH
-```
-
-A new line appears every 60 seconds (matching the gateway publish interval).
-
-### Test InfluxDB connectivity from dev machine (PowerShell)
+### Get log filename (dev machine)
 
 ```powershell
-python -c "
-import urllib.request, ssl, urllib.parse
-url = 'https://us-east-1-1.aws.cloud2.influxdata.com/api/v2/write?' + urllib.parse.urlencode({'org':'Cisco_IIoT_Brazil_Edge_Projects','bucket':'sensor_data','precision':'s'})
-req = urllib.request.Request(url, data=b'test_ping x=1', method='POST', headers={'Authorization':'Token LiVKmmKVRKBIWrXEBy8K7jMvThBJa83qUmc9RNp6ffw9ne5WYAwmvsQPclYwBwqi6-SrWcandkBB9xmq3ah1aw==','Content-Type':'text/plain'})
-try:
-    urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=10)
-    print('SUCCESS')
-except Exception as e:
-    print(f'FAILED: {e}')
-"
+ioxclient app logs info influx_bridge
 ```
+
+### Tail logs
+
+```powershell
+ioxclient app logs tail influx_bridge <filename-from-above> 50
+```
+
+Healthy output:
+```
+[INFO] === IR1835 InfluxDB Bridge Starting ===
+[INFO] MQTT broker  : ...hivemq.cloud:8883
+[INFO] InfluxDB URL : https://us-east-1-1.aws.cloud2.influxdata.com
+[INFO] MQTT connected to ...hivemq.cloud:8883
+[INFO] Subscribed to sensor/+/sensorData
+[INFO] InfluxDB write OK → 31.9°C  41.0%RH
+[INFO] InfluxDB write OK → 31.9°C  40.8%RH
+```
+
+A new `InfluxDB write OK` line appears every 60 seconds.
 
 ---
 
@@ -193,7 +257,7 @@ except Exception as e:
 4. Select the InfluxDB datasource when prompted
 5. Click **Import**
 
-### Datasource configuration (if reconfiguring)
+### Datasource configuration
 
 | Field | Value |
 |-------|-------|
@@ -201,7 +265,7 @@ except Exception as e:
 | Query Language | **Flux** (not InfluxQL) |
 | URL | `https://us-east-1-1.aws.cloud2.influxdata.com` |
 | Organization | `Cisco_IIoT_Brazil_Edge_Projects` |
-| Token | *(see config.py)* |
+| Token | *(see activate_payload.json)* |
 | Default Bucket | `sensor_data` |
 
 ### Share dashboard publicly (for demo)
@@ -219,17 +283,24 @@ except Exception as e:
 ### Bridge logs show "MQTT connect failed"
 - Verify internet connectivity from router: `ping 8.8.8.8`
 - Check VirtualPortGroup0 is up: `show interfaces VirtualPortGroup0`
-- Confirm guest IP `192.168.16.3` is configured
+- Confirm guest IP `192.168.16.3` is configured in router
 
 ### Bridge logs show "InfluxDB HTTP error 401"
-- Token has expired or was regenerated — update `INFLUX_TOKEN` in `config.py`, rebuild and redeploy
+- Token has expired or was regenerated
+- Update `INFLUX_TOKEN` in `activate_payload.json` startup.env
+- Stop → deactivate → re-activate → start (no rebuild needed)
 
 ### Bridge logs show "InfluxDB HTTP error 404"
-- Bucket `sensor_data` was deleted — recreate it in InfluxDB Cloud: **Add Data → Buckets → Create Bucket**
+- Bucket `sensor_data` was deleted — recreate it in InfluxDB Cloud:
+  **Load Data → Buckets → Create Bucket**
 
 ### No data in Grafana but bridge logs show writes OK
-- Check Grafana datasource: query language must be set to **Flux**, not InfluxQL
-- Verify the bucket name matches exactly: `sensor_data` (lowercase)
+- Check datasource: query language must be **Flux**, not InfluxQL
+- Verify bucket name matches exactly: `sensor_data` (case-sensitive)
+
+### Env vars not applied (app still using old credentials)
+- Must use `ioxclient app activate --payload activate_payload.json influx_bridge`
+- The router CLI `app-hosting activate` does not inject startup.env variables
 
 ### ioxclient "access token expired"
 - Normal — ioxclient auto-renews and retries. The command succeeds on the retry.
@@ -238,18 +309,29 @@ except Exception as e:
 
 ## Design Notes
 
-**No `influxdb-client` library** — InfluxDB writes use Python's stdlib `urllib` with
-the line protocol HTTP API. This keeps `requirements.txt` identical to the gateway
-(`paho-mqtt==1.6.1` only), produces a smaller Docker image, and eliminates a large
-dependency chain.
+**No `influxdb-client` library** — writes use Python's stdlib `urllib` with the
+InfluxDB line protocol HTTP API. Keeps `requirements.txt` minimal (`paho-mqtt` only),
+produces a smaller Docker image, and eliminates a large dependency chain.
 
 **MQTT wildcard topic** `sensor/+/sensorData` — the gateway generates a dynamic topic
-based on its eth0 MAC address hash. The wildcard catches it regardless of the device ID,
-and would support multiple gateways simultaneously without any config change.
+based on its eth0 MAC address hash. The wildcard catches it regardless of device ID,
+and supports multiple gateways simultaneously without config changes.
 
-**Unique MQTT client ID** `influx-bridge-iox` — HiveMQ rejects two clients with the same
-ID, so this must differ from the gateway's `ir1835-{hash}`.
+**Unique MQTT client ID** `influx-bridge-iox` — HiveMQ rejects two clients with the
+same ID, so this must differ from the gateway's `ir1835-{hash}`.
 
-**Standard activation** — unlike `modbus_mqtt_gateway` which requires `ioxclient app activate
---payload activate_payload.json`, this app has no serial device binding and can be activated
-with the normal `app-hosting activate` router CLI command.
+---
+
+## Git Repository
+
+- **Remote:** https://github.com/juliogouy/ir1835-influx-bridge
+- **Main branch:** `master` — stable, deployed version
+- **`config.py` is excluded from git** (contains real credentials)
+- **`dist/*.tar` is excluded from git** (large binary build artifacts)
+
+To merge a tested feature branch:
+```powershell
+git checkout master
+git merge feature/env-vars
+git push
+```
