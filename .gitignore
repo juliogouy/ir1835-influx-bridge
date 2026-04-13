@@ -1,0 +1,12 @@
+# Credentials — never commit the real config (use config.example.py as template)
+config.py
+
+# IOx build artefacts
+rootfs.tar
+*.tar
+__pycache__/
+*.pyc
+.env
+
+# Claude Code settings
+.claude/

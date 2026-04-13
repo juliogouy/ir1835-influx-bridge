@@ -1,0 +1,32 @@
+# ============================================================
+# package.yaml - Cisco IOx Application Manifest
+# ============================================================
+# Describes the influx_bridge IOx application.
+# This app is purely network-based — no serial device binding needed.
+# Activation via standard router CLI:
+#   app-hosting activate appid influx_bridge
+# (no ioxclient --payload trick required)
+# ============================================================
+
+descriptor-schema-version: "2.3"
+
+info:
+  name: influx_bridge
+  description: "Subscribes to HiveMQ MQTT and forwards sensor readings to InfluxDB Cloud for Grafana visualization"
+  version: "1.0.0"
+  author-link: ""
+  author-name: ""
+
+app:
+  cpuarch: "aarch64"    # IR1835 uses 64-bit ARM processor
+  type: docker
+
+  resources:
+    profile: custom
+
+    network:
+      - interface-name: eth0      # Internet access to HiveMQ and InfluxDB Cloud
+
+  startup:
+    rootfs: rootfs.tar
+    target: ["python3", "-u", "/app/app.py"]

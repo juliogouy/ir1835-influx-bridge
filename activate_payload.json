@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "profile": "custom",
+    "network": [
+      { "interface-name": "eth0", "network-name": "VPG0", "port_map": {}, "ipv4": {}, "ipv6": {}, "mirroring": "no", "intf-matched": true }
+    ],
+    "cpu": "100",
+    "memory": 128,
+    "disk": 20,
+    "auto_remove": true
+  },
+  "startup": {
+    "runtime_options": "--rm"
+  }
+}

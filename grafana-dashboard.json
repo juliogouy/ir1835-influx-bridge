@@ -1,0 +1,486 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_INFLUXDB",
+      "label": "InfluxDB",
+      "description": "Your InfluxDB Cloud datasource (must be configured with Flux query language)",
+      "type": "datasource",
+      "pluginId": "influxdb",
+      "pluginName": "InfluxDB"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "9.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "influxdb",
+      "name": "InfluxDB",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "gauge",
+      "name": "Gauge",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "row",
+      "name": "Row",
+      "version": ""
+    }
+  ],
+  "title": "Electrical Panel & Control Board Monitoring — Critical Infrastructure",
+  "description": "Real-time temperature and humidity monitoring inside electrical panels and control boards at pumping stations and water/wastewater treatment plants. Detects overheating and condensation before they cause failures in breakers, relays, and PLCs.",
+  "uid": "ir1835-elec-panel",
+  "schemaVersion": 37,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-3h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["iot", "cisco", "modbus", "ir1835"],
+  "editable": true,
+  "graphTooltip": 1,
+  "annotations": { "list": [] },
+  "links": [],
+  "templating": { "list": [] },
+  "timepicker": {},
+  "fiscalYearStartMonth": 0,
+  "liveNow": true,
+  "weekStart": "",
+  "style": "dark",
+  "id": null,
+
+  "panels": [
+
+    {
+      "type": "row",
+      "id": 10,
+      "title": "Current Readings",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+
+    {
+      "type": "stat",
+      "id": 1,
+      "title": "Temperature",
+      "description": "Latest reading from XY-MD02 sensor",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "text": { "valueSize": 60 }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue",   "value": null },
+              { "color": "green",  "value": 15   },
+              { "color": "yellow", "value": 28   },
+              { "color": "red",    "value": 35   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temperature_c\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "Humidity",
+      "description": "Latest reading from XY-MD02 sensor",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "text": { "valueSize": 60 }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "humidity",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "green",  "value": 30   },
+              { "color": "yellow", "value": 65   },
+              { "color": "red",    "value": 80   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"humidity_rh\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "type": "gauge",
+      "id": 3,
+      "title": "Temperature Gauge",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -10,
+          "max": 60,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue",   "value": null },
+              { "color": "green",  "value": 15   },
+              { "color": "yellow", "value": 28   },
+              { "color": "red",    "value": 35   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temperature_c\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "type": "gauge",
+      "id": 4,
+      "title": "Humidity Gauge",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "humidity",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "green",  "value": 30   },
+              { "color": "yellow", "value": 65   },
+              { "color": "red",    "value": 80   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"humidity_rh\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "type": "row",
+      "id": 11,
+      "title": "Historical Trends",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "panels": []
+    },
+
+    {
+      "type": "timeseries",
+      "id": 5,
+      "title": "Temperature Over Time",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 7 },
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "showPoints": "auto",
+            "pointSize": 5,
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "axisLabel": "Temperature (°C)",
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 35   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temperature_c\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")"
+        }
+      ]
+    },
+
+    {
+      "type": "timeseries",
+      "id": 6,
+      "title": "Humidity Over Time",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 7 },
+      "options": {
+        "tooltip": { "mode": "single", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "humidity",
+          "decimals": 1,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "showPoints": "auto",
+            "pointSize": 5,
+            "spanNulls": false,
+            "axisPlacement": "auto",
+            "axisLabel": "Humidity (%RH)",
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 65   },
+              { "color": "red",    "value": 80   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"humidity_rh\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"mean\")"
+        }
+      ]
+    },
+
+    {
+      "type": "row",
+      "id": 12,
+      "title": "Gateway Info",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "panels": []
+    },
+
+    {
+      "type": "stat",
+      "id": 7,
+      "title": "Last Data Received",
+      "description": "Timestamp of the most recent sensor reading",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 17 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null  },
+              { "color": "yellow", "value": 180   },
+              { "color": "red",    "value": 600   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temperature_c\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: float(v: uint(v: r._time)) / 1000000.0}))"
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "id": 8,
+      "title": "Total Readings (Last 24h)",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 17 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 1    }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temperature_c\")\n  |> count()"
+        }
+      ]
+    },
+
+    {
+      "type": "stat",
+      "id": 9,
+      "title": "Avg Temperature (Last 24h)",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 17 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue",   "value": null },
+              { "color": "green",  "value": 15   },
+              { "color": "yellow", "value": 28   },
+              { "color": "red",    "value": 35   }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "refId": "A",
+          "query": "from(bucket: \"sensor_data\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"sensor_reading\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temperature_c\")\n  |> mean()"
+        }
+      ]
+    }
+
+  ]
+}
